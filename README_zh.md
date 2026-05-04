@@ -10,6 +10,7 @@ macOS / Windows / Linux / Android。
 
 ## 亮点
 
+- **AI 排查** —— LLM 驱动的通用运维问题定位；每次工具调用都过 shape validator、你的授权、本地脱敏三道关卡，payload 离机前已清洗
 - **命令块色条** —— 零远端依赖，终端命令块自动按颜色分组
 - **CLI 优先** —— CLI 与 GUI 共享同一个数据库，任意终端 `rssh open prod`
 - **安全与同步** —— 密钥进系统钥匙串，按凭据控制同步范围，加密备份到你自己的 GitHub 仓库
@@ -31,16 +32,17 @@ macOS / Windows / Linux / Android。
 
 从 [Releases](../../releases) 下载：
 
-| 平台 | 文件 | 备注 |
-|---|---|---|
-| macOS Apple Silicon | `rssh-{ver}-macos-aarch64.dmg` | |
-| macOS Intel | `rssh-{ver}-macos-x86_64.dmg` | |
-| Linux (deb) | `rssh-{ver}-linux-x86_64.deb` | Debian/Ubuntu |
-| Linux (rpm) | `rssh-{ver}-linux-x86_64.rpm` | Fedora/RHEL |
-| Linux (AppImage) | `rssh-{ver}-linux-x86_64.AppImage` | 任意发行版 |
-| Windows | `rssh-{ver}-windows-x86_64.msi` | 静默安装：`msiexec /i` |
-| Windows | `rssh-{ver}-windows-x86_64-setup.exe` | 图形安装器 |
-| Android | `rssh-{ver}-android-universal.apk` | |
+| 平台                  | 文件                                   | 备注              |
+|---------------------|--------------------------------------|-----------------|
+| macOS Apple Silicon | `rssh-{ver}-macos-aarch64.dmg`       |                 |
+| macOS Intel         | `rssh-{ver}-macos-x86_64.dmg`        |                 |
+| Linux (deb)         | `rssh-{ver}-linux-x86_64.deb`        | Debian/Ubuntu   |
+| Linux (rpm)         | `rssh-{ver}-linux-x86_64.rpm`        | Fedora/RHEL     |
+| Linux (AppImage)    | `rssh-{ver}-linux-x86_64.AppImage`   | 任意发行版           |
+| Windows             | `rssh-{ver}-windows-x86_64.msi`      | 静默安装：`msiexec /i` |
+| Windows             | `rssh-{ver}-windows-x86_64-setup.exe` | 图形安装器           |
+| Android             | `rssh-{ver}-android-universal.apk`   |                 |
+| iOS                 |                                      | 没有开发者账号，自行打包    |
 
 ## 开发
 

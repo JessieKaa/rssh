@@ -10,6 +10,7 @@ macOS / Windows / Linux / Android.
 
 ## Boom!
 
+- **AI Diagnostics** -- LLM-driven general ops triage on the connected host; every tool call gated by shape validator, your approval, and local redaction before the payload leaves your machine
 - **Command Block Colors** -- zero remote dependency, color-coded command blocks in terminal
 - **CLI-First** -- CLI and GUI share one database, `rssh open prod` from any terminal
 - **Security & Sync** -- secrets in platform keychain, per-credential sync filter, encrypted backup to your own GitHub repo
@@ -31,16 +32,17 @@ macOS / Windows / Linux / Android.
 
 Download from [Releases](../../releases):
 
-| Platform | File | Notes |
-|---|---|---|
-| macOS Apple Silicon | `rssh-{ver}-macos-aarch64.dmg` | |
-| macOS Intel | `rssh-{ver}-macos-x86_64.dmg` | |
-| Linux (deb) | `rssh-{ver}-linux-x86_64.deb` | Debian/Ubuntu |
-| Linux (rpm) | `rssh-{ver}-linux-x86_64.rpm` | Fedora/RHEL |
-| Linux (AppImage) | `rssh-{ver}-linux-x86_64.AppImage` | Any distro |
-| Windows | `rssh-{ver}-windows-x86_64.msi` | Silent install: `msiexec /i` |
-| Windows | `rssh-{ver}-windows-x86_64-setup.exe` | GUI installer |
-| Android | `rssh-{ver}-android-universal.apk` | |
+| Platform            | File                                  | Notes                        |
+|---------------------|---------------------------------------|------------------------------|
+| macOS Apple Silicon | `rssh-{ver}-macos-aarch64.dmg`        |                              |
+| macOS Intel         | `rssh-{ver}-macos-x86_64.dmg`         |                              |
+| Linux (deb)         | `rssh-{ver}-linux-x86_64.deb`         | Debian/Ubuntu                |
+| Linux (rpm)         | `rssh-{ver}-linux-x86_64.rpm`         | Fedora/RHEL                  |
+| Linux (AppImage)    | `rssh-{ver}-linux-x86_64.AppImage`    | Any distro                   |
+| Windows             | `rssh-{ver}-windows-x86_64.msi`       | Silent install: `msiexec /i` |
+| Windows             | `rssh-{ver}-windows-x86_64-setup.exe` | GUI installer                |
+| Android             | `rssh-{ver}-android-universal.apk`    |                              |
+| iOS                 |                                       | No ID, build you self        |
 
 ## Development
 
