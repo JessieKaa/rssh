@@ -1,8 +1,16 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
+    import { invoke } from "@tauri-apps/api/core";
     import * as ai from "../ai/store.svelte.ts";
     import { t, errMsg } from "../i18n/index.svelte.ts";
     import type { LlmProvider, ModelInfo, SkillRecord } from "../ai/types.ts";
+
+    function openExternal(e: MouseEvent, url: string) {
+        e.preventDefault();
+        invoke("open_external_url", { url }).catch(err =>
+            console.error("open_external_url failed:", err)
+        );
+    }
 
     // ─── BYOK ─────────────────────────────────────────────────
     let provider = $state<LlmProvider>("anthropic");
@@ -237,10 +245,10 @@
 <div class="page">
     <div class="warn">
         {t("ai.settings.warn.byok")}
-        （<a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Anthropic</a>
-         / <a href="https://openai.com/policies/privacy-policy/" target="_blank" rel="noopener">OpenAI</a>
-         / <a href="https://platform.deepseek.com/downloads" target="_blank" rel="noopener">DeepSeek</a>
-         / <a href="https://docs.bigmodel.cn/cn/terms/privacy-policy" target="_blank" rel="noopener">GLM</a>）。
+        （<a href="https://www.anthropic.com/legal/privacy" onclick={(e) => openExternal(e, "https://www.anthropic.com/legal/privacy")}>Anthropic</a>
+         / <a href="https://openai.com/policies/privacy-policy/" onclick={(e) => openExternal(e, "https://openai.com/policies/privacy-policy/")}>OpenAI</a>
+         / <a href="https://platform.deepseek.com/downloads" onclick={(e) => openExternal(e, "https://platform.deepseek.com/downloads")}>DeepSeek</a>
+         / <a href="https://docs.bigmodel.cn/cn/terms/privacy-policy" onclick={(e) => openExternal(e, "https://docs.bigmodel.cn/cn/terms/privacy-policy")}>GLM</a>）。
     </div>
 
     <div class="section-label">{t("ai.settings.section.provider")}</div>
