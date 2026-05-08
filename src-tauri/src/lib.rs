@@ -43,10 +43,24 @@ pub fn run() {
 
             // 一次性清理：旧版曾把私钥 passphrase 落盘到 SecretStore。
             // 新流程改为终端内交互输入 + 进程内缓存，旧条目永不读，全部删掉。
-            // 失败不致命：删不掉的项最坏情况是占几个字节，不影响功能。
-            if let Ok(creds) = db::credential::list(&db) {
-                for c in creds {
-                    let _ = secret_store.delete(&secret::cred_passphrase_key(&c.id));
+            // 用 setting 标志记录已迁移，避免每次启动都遍历 keychain 删 N 次。
+            // **只有**列表 + 全部 delete 都成功才打标——任何失败留待下次启动重试，
+            // 避免 keychain 暂时锁定 / DB 暂时不可读时把 stale passphrase 永远留下。
+            const MIGRATION_KEY: &str = "migration_passphrase_keychain_cleared_v1";
+            if matches!(db::settings::get(&db, MIGRATION_KEY), Ok(None)) {
+                if let Ok(creds) = db::credential::list(&db) {
+                    let mut all_ok = true;
+                    for c in creds {
+                        if secret_store
+                            .delete(&secret::cred_passphrase_key(&c.id))
+                            .is_err()
+                        {
+                            all_ok = false;
+                        }
+                    }
+                    if all_ok {
+                        let _ = db::settings::set(&db, MIGRATION_KEY, "1");
+                    }
                 }
             }
 
@@ -115,6 +129,7 @@ pub fn run() {
             commands::session::ssh_resize,
             commands::session::ssh_disconnect,
             commands::session::ssh_auth_respond,
+            commands::session::ssh_auth_cancel,
             commands::session::ssh_passphrase_respond,
             commands::session::ssh_passphrase_cancel,
             commands::session::ssh_host_key_respond,

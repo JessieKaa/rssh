@@ -46,9 +46,13 @@ russh-sftp = "2"
 # HTTP + crypto
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 base64 = "0.22"
-sha2 = "0.10"
-hmac = "0.12"
+# 配置备份/同步走 Argon2id（KDF）+ ChaCha20-Poly1305（AEAD），
+# 标准 RustCrypto 实现；不再手搓。getrandom 用于生成 salt + nonce。
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
 getrandom = "0.2"
+# 进程内 passphrase 缓存的内存清零保护（drop 时擦写底层字节）
+zeroize = { version = "1", features = ["derive"] }
 regex = "1"
 futures-util = "0.3"
 
@@ -87,5 +91,5 @@ path = "src/main.rs"
 
 [[bin]]
 name = "rssh-cli"
-path = "src/bin/rssh.rs"
+path = "src/bin/rssh/main.rs"
 required-features = ["cli"]
