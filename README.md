@@ -8,6 +8,8 @@ macOS / Windows / Linux / Android.
 
 > Read the story: [Why RSSH? — An SSH Client Born to be an AI Ops Assistant](docs/article_en.md) ([中文](docs/article_zh.md))
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shihuili1218/rssh)
+
 ## Boom!
 
 - **AI Diagnostics** -- LLM-driven general ops triage on the connected host; every tool call gated by shape validator, your approval, and local redaction before the payload leaves your machine

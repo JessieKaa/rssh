@@ -8,6 +8,8 @@ macOS / Windows / Linux / Android。
 
 > 设计理念：[为什么是 RSSH？—— 天生的 AI 运维助手](docs/article_zh.md) ([English](docs/article_en.md))
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shihuili1218/rssh)
+
 ## 亮点
 
 - **AI 排查** —— LLM 驱动的通用运维问题定位；每次工具调用都过 shape validator、你的授权、本地脱敏三道关卡，payload 离机前已清洗
