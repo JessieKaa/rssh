@@ -1,24 +1,68 @@
-//! 密钥存储抽象层。
+//! 密钥存储抽象层 —— 统一架构（所有平台一致）。
 //!
-//! 优先用系统 keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service）。
-//! 不可用时（Android、Linux headless、容器无 D-Bus 等）自动降级到 DB 的 `secrets` 表。
+//! 设计：master-key envelope encryption + DB 表存储。
+//!
+//! ```text
+//!     SecretStore.set/get   ← 调用方（cred:* / setting:* 等）
+//!         │
+//!         ▼
+//!     HybridStore             ← ChaCha20-Poly1305 加/解密
+//!       ├── master_key (32B)
+//!       │     ├── KeyringMasterKey  ← keychain（mac/win/linux-desktop）
+//!       │     └── FileMasterKey     ← <data_dir>/master.key（headless/Android）
+//!       │
+//!       └── DbStore  ← rssh.db 的 `secrets` 表（密文 base64）
+//! ```
+//!
+//! 为什么不再像旧版那样直接走 keychain：
+//!   - Windows Credential Manager 硬限 2560 字节，RSA 私钥 PEM 必撞
+//!   - 跨平台 keychain 容量/性能不统一
+//!   - "把布尔开关塞 keychain" 是滥用（PR #59 已把行为偏好搬出去）
+//!
+//! 主密钥 lazy 生成：首次 set/get 触发；新用户没 secret 就永不触发 keychain。
+//!
+//! Backend 选择规则（sticky）：
+//!   - 首次启动按运行期 `try_open()` 探测决定：keychain 可用 → keyring，不可用
+//!     → file。结果写 `db.settings.master_key_backend` 标记。
+//!   - 后续启动按标记走，**永不翻转**：曾经 keyring → 必须 keyring，keychain 不可
+//!     用就硬 fail（避免 silently 切到 file 用新主密钥让旧密文全部解不开）。
+//!   - 编译期 `#[cfg(...)]` 只是排除 iOS/Android（keyring crate 没这俩平台后端），
+//!     **运行期是否选 keyring 由 `try_open()` 真探测决定**，不是看 OS。
 //!
 //! Service 名固定 `rssh`，account 命名规则全平台、CLI/GUI 共用：
 //! - `cred:<credential_id>:secret`     凭证主 secret（密码或私钥 PEM）
 //! - `setting:github_token`            GitHub PAT
+//! - `setting:ai_<provider>_key`       BYOK API key
 //!
-//! 历史遗留：`cred:<credential_id>:passphrase` 曾用于存储私钥 passphrase，
-//! 已废弃 — 启动时统一清空（参见 `lib.rs` 中的迁移），新流程通过终端交互输入
-//! 并仅在进程内缓存。`cred_passphrase_key` 仍保留，仅供该清空逻辑使用。
+//! 历史遗留：`cred:<credential_id>:passphrase` 曾用于存私钥 passphrase，
+//! 已废弃 — 启动时统一清空（migration），新流程仅进程内缓存。
 
+use std::path::Path;
 use std::sync::Arc;
 
-use crate::db::Db;
-use crate::error::AppResult;
+use serde_json::json;
 
+use crate::db::{self, Db};
+use crate::error::{AppError, AppResult};
+
+pub mod crypto;
 mod db_store;
+mod hybrid_store;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 mod keyring_store;
+mod master_key;
+
+pub use db_store::DbStore;
+pub use hybrid_store::HybridStore;
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+pub use keyring_store::KeyringStore;
+pub use master_key::{FileMasterKey, KeyringMasterKey, MasterKeyBackend};
+
+/// 持久化 backend 选择标记。db.settings 表里存储。
+/// "keyring" / "file"。一旦写入永不修改（除非用户手动操作 DB）。
+const BACKEND_MARKER: &str = "master_key_backend";
+const BACKEND_KEYRING: &str = "keyring";
+const BACKEND_FILE: &str = "file";
 
 /// 服务名 — keychain 用，所有 rssh 数据都在这个 service 下。
 pub const SERVICE: &str = "rssh";
@@ -30,17 +74,127 @@ pub trait SecretStore: Send + Sync {
     fn backend_name(&self) -> &'static str;
 }
 
-/// 打开 SecretStore：能用 keychain 就用，否则降级到 DB。
-pub fn open(db: Arc<Db>) -> Arc<dyn SecretStore> {
+/// 打开 SecretStore 系统 —— 返回组合对象：
+///   - `store`：调用方用的统一 SecretStore（HybridStore，加密 DB 入口）
+///   - `raw_keyring`：底层 keychain handle 作为 trait object，给 migration 用来读老
+///     keychain 残留；keychain 不可用时为 None
+///
+/// migration::run_migrations 启动时被调一次（lib.rs setup / CLI ctx）。
+///
+/// **可能失败**：sticky backend 标记为 keyring 但 keychain 现在不可用时硬 fail，
+/// 而不是 silently fallback 到 file（那会用新主密钥让旧密文全部解不开）。
+pub struct SecretSystem {
+    pub store: Arc<dyn SecretStore>,
+    pub raw_keyring: Option<Arc<dyn SecretStore>>,
+}
+
+pub fn open(db: Arc<Db>, data_dir: &Path) -> AppResult<SecretSystem> {
+    let db_store = Arc::new(DbStore::new(db.clone()));
+    let recorded = db::settings::get(&db, BACKEND_MARKER)?;
+
+    // 运行期探测：编译进 keyring crate 的平台 (mac/win/linux) + 真能 probe 写读
+    let probed: Option<Arc<dyn SecretStore>> = probe_keyring();
+
+    match (recorded.as_deref(), probed) {
+        // ── sticky keyring + 可用 → 用 keyring ──
+        (Some(BACKEND_KEYRING), Some(kr)) => {
+            log::debug!("secret backend: keyring (sticky)");
+            Ok(build_keyring_system(db.clone(), db_store, kr))
+        }
+
+        // ── sticky keyring + 不可用 → 硬 fail ──
+        // 这条是数据安全护栏：之前主密钥写在 keychain 里，现在 keychain 拿不到，
+        // 任何 secret 读写都会失败。silently fallback 到 file 会生成新主密钥，
+        // 把之前所有 keychain 加密过的 DB 密文永久变废纸。
+        (Some(BACKEND_KEYRING), None) => Err(AppError::other(
+            "keychain_unavailable_but_required",
+            json!({
+                "hint": "之前选过系统 keychain 存主密钥，现在 keychain 不可用。\
+                         请检查系统 keychain（macOS Keychain Access / Windows \
+                         Credential Manager / Linux Secret Service）是否正常，\
+                         然后重启 rssh。"
+            }),
+        )),
+
+        // ── sticky file → 永远 file ──
+        // raw_keyring 仍传 migration 用：如果用户当前 keychain 可用，可能有老
+        // 版本残留的 keychain 数据要迁过来（v0.1.x 走过 keyring backend 但当时
+        // 没 BACKEND_MARKER 标记，sticky 升级时记录的是 file 是另一种 case 不存
+        // 在 — 仅升级路径会写 marker）。
+        (Some(BACKEND_FILE), probed_for_migration) => {
+            log::debug!("secret backend: file (sticky)");
+            Ok(build_file_system(db_store, data_dir, probed_for_migration))
+        }
+
+        // ── 首次启动：按 probe 结果选 + 写 marker ──
+        (None, Some(kr)) => {
+            db::settings::set(&db, BACKEND_MARKER, BACKEND_KEYRING)?;
+            log::info!("secret backend selected: keyring (first run)");
+            Ok(build_keyring_system(db.clone(), db_store, kr))
+        }
+        (None, None) => {
+            db::settings::set(&db, BACKEND_MARKER, BACKEND_FILE)?;
+            log::warn!(
+                "secret backend selected: file (first run, keychain unavailable); \
+                 master key will be stored at <data_dir>/master.key"
+            );
+            Ok(build_file_system(db_store, data_dir, None))
+        }
+
+        // ── 未知 marker 值 → 硬 fail，让人来看 DB ──
+        (Some(other), _) => Err(AppError::other(
+            "master_key_backend_unknown",
+            json!({ "value": other.to_string() }),
+        )),
+    }
+}
+
+/// 运行期探测系统 keychain。`#[cfg(...)]` 排除编译不进 keyring crate 的平台
+/// （iOS / Android），其他平台靠 `try_open()` 真探测（写 probe key + 读回 + 删）。
+fn probe_keyring() -> Option<Arc<dyn SecretStore>> {
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     {
-        if let Some(store) = keyring_store::try_open() {
-            log::info!("secret store backend: keychain ({})", store.backend_name());
-            return Arc::new(store);
-        }
-        log::warn!("system keychain unavailable, falling back to DB-backed secret store");
+        keyring_store::try_open().map(|kr| {
+            let arc: Arc<KeyringStore> = Arc::new(kr);
+            arc as Arc<dyn SecretStore>
+        })
     }
-    Arc::new(db_store::DbStore::new(db))
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+fn build_keyring_system(
+    db: Arc<Db>,
+    db_store: Arc<DbStore>,
+    keyring: Arc<dyn SecretStore>,
+) -> SecretSystem {
+    // backend_label 直接透传 KeyringStore 的 OS-specific 名字（"macos-keychain"
+    // 等），跟 PR #60 前 CLI/GUI 显示一致，不破坏 user-facing 字符串契约。
+    let label = keyring.backend_name();
+    // db 传给 KeyringMasterKey 做 SQLite IMMEDIATE 跨进程互斥（CLI+GUI 并发首次启
+    // 动时序列化 master key 生成）。FileMasterKey 不需要，文件创建已经原子。
+    let mk_backend: Arc<dyn MasterKeyBackend> =
+        Arc::new(KeyringMasterKey::new(keyring.clone(), db));
+    let store: Arc<dyn SecretStore> = Arc::new(HybridStore::new(db_store, mk_backend, label));
+    SecretSystem {
+        store,
+        raw_keyring: Some(keyring),
+    }
+}
+
+fn build_file_system(
+    db_store: Arc<DbStore>,
+    data_dir: &Path,
+    probed_keyring: Option<Arc<dyn SecretStore>>,
+) -> SecretSystem {
+    let mk_backend: Arc<dyn MasterKeyBackend> = Arc::new(FileMasterKey::new(data_dir));
+    let store: Arc<dyn SecretStore> = Arc::new(HybridStore::new(db_store, mk_backend, "file"));
+    SecretSystem {
+        store,
+        raw_keyring: probed_keyring,
+    }
 }
 
 // --- helpers for canonical key naming (CLI/GUI must agree) ---
