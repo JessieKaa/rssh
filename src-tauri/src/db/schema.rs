@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use crate::error::AppResult;
 
-const SCHEMA_VERSION: u32 = 12;
+const SCHEMA_VERSION: u32 = 13;
 
 pub fn migrate(conn: &Connection) -> AppResult<()> {
     let version: u32 = conn
@@ -114,6 +114,20 @@ pub fn migrate(conn: &Connection) -> AppResult<()> {
                 content     TEXT NOT NULL,
                 created_at  INTEGER NOT NULL DEFAULT 0,
                 updated_at  INTEGER NOT NULL DEFAULT 0
+            );
+            ",
+        )?;
+    }
+
+    if version < 13 {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS frpc_configs (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                file_name  TEXT NOT NULL UNIQUE,
+                enabled    INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT 0
             );
             ",
         )?;

@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# FrpcService is called via JNI from Rust — must not be obfuscated
+-keep class com.rssh.app.FrpcService { *; }

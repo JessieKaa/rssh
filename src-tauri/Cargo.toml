@@ -70,6 +70,11 @@ portable-pty = "0.8"
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
 arboard = "3"
 
+# Android JNI — frpc 前台服务通知
+[target.'cfg(target_os = "android")'.dependencies]
+ndk-context = "0.1"
+jni = { version = "0.21", features = ["invocation"] }
+
 # Keychain — 各平台用各自原生 backend；Android 没有支持，自动降级到 DB
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }

@@ -40,7 +40,9 @@ export type SettingsPage =
   | "shortcuts"
   | "appearance"
   | "ai"
-  | "about";
+  | "about"
+  | "frpc"
+  | "frpc-edit";
 
 export interface Group {
   id: string; name: string; color: string; sort_order: number;
@@ -58,6 +60,10 @@ export interface Credential {
 export interface Forward {
   id: string; name: string; type: string;
   local_port: number; remote_host: string; remote_port: number; profile_id: string;
+}
+export interface FrpcConfig {
+  id: string; name: string; file_name: string;
+  enabled: boolean; created_at: number;
 }
 export interface Snippet { name: string; command: string; }
 export interface HighlightRule { keyword: string; color: string; enabled: boolean; }
@@ -226,6 +232,7 @@ export function settingsBack() {
   else if (_settingsPage === "credential-edit") _settingsPage = "credentials";
   else if (_settingsPage === "forward-edit") _settingsPage = "forwards";
   else if (_settingsPage === "import-ssh-config") _settingsPage = "import-export";
+  else if (_settingsPage === "frpc-edit") _settingsPage = "frpc";
   else _settingsPage = "menu";
 }
 
@@ -407,12 +414,12 @@ export function requestSearch(tabId: string) {
   _searchRequest = { tabId, n: (_searchRequest?.n ?? 0) + 1 };
 }
 
-/* ─── SFTP overlay (desktop only — rfd has no Android native dialog) ─── */
-/** 给当前活跃 tab 开 SFTP；mobile 屏蔽。仅 ssh tab 有意义（共用其 SSH channel；
+/* ─── SFTP overlay (mobile browse-only; upload/download disabled on mobile) ─── */
+/** 给当前活跃 tab 开 SFTP。仅 ssh tab 有意义（共用其 SSH channel；
  *  local PTY 没有远端文件系统）。UI 入口已 gate `!isSsh`，这里再 gate 防止
  *  键盘 navigate("sftp") 等路径绕过 UI，把 home/local/edit tab 错误标为 open。 */
 export function openSftp() {
-  if (isMobile || !_activeTabId) return;
+  if (!_activeTabId) return;
   const tab = _tabs.find(t => t.id === _activeTabId);
   if (!tab || tab.type !== "ssh") return;
   _sftpOpenByTab = { ..._sftpOpenByTab, [_activeTabId]: true };
@@ -455,6 +462,9 @@ export async function loadCredentials(): Promise<Credential[]> {
 }
 export async function loadForwards(): Promise<Forward[]> {
   return invoke<Forward[]>("list_forwards");
+}
+export async function loadFrpcConfigs(): Promise<FrpcConfig[]> {
+  return invoke<FrpcConfig[]>("list_frpc_configs");
 }
 export async function loadSnippets(): Promise<Snippet[]> {
   return invoke<Snippet[]>("load_snippets");

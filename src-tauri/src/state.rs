@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::ai::session::DiagnoseSession;
 use crate::db::Db;
+use crate::frpc::handle::FrpcHandle;
 use crate::secret::SecretStore;
 use crate::ssh::client::SessionHandle;
 use crate::ssh::forward::ForwardHandle;
@@ -39,5 +40,9 @@ pub struct AppState {
     pub window_sessions: Mutex<HashMap<String, HashSet<String>>>,
     /// AI 排障会话表（ai_session_id → DiagnoseSession）
     pub ai_sessions: Mutex<HashMap<String, DiagnoseSession>>,
+    /// 活跃 frpc 进程（config_id → FrpcHandle）
+    pub active_frpc: Mutex<HashMap<String, FrpcHandle>>,
+    /// frpc 自动启动时收集的错误信息
+    pub frpc_auto_start_errors: Mutex<Vec<String>>,
     pub data_dir: PathBuf,
 }

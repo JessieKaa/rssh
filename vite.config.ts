@@ -6,6 +6,9 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
+  build: {
+    target: "chrome64",
+  },
   server: {
     host: host || false,
     port: 1420,

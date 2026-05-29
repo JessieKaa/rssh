@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod external;
 pub mod forward;
+pub mod frpc;
 pub mod group;
 pub mod lifecycle;
 pub mod profile;

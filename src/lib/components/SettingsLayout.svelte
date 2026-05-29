@@ -23,6 +23,8 @@
   import CliSettings from "./CliSettings.svelte";
   import AppearanceSettings from "./AppearanceSettings.svelte";
   import AiSettings from "./AiSettings.svelte";
+  import FrpcManager from "./FrpcManager.svelte";
+  import FrpcEditor from "./FrpcEditor.svelte";
   import Select from "./Select.svelte";
 
   /** locale 下拉选项 —— AVAILABLE_LOCALES 是常量，不需要 $derived。 */
@@ -52,6 +54,8 @@
     "ai":                 { component: AiSettings },
     "shortcuts":          { component: ShortcutsScreen },
     "about":              { component: AboutScreen },
+    "frpc":               { component: FrpcManager },
+    "frpc-edit":          { component: FrpcEditor, needsId: true },
   };
 
   const COMPACT_BREAKPOINT = 640;
@@ -70,6 +74,7 @@
     { id: "credentials", label: t("settings.section.credentials"), section: "Connections" },
     { id: "forwards", label: t("settings.section.forwards"), section: "Connections" },
     { id: "groups", label: t("settings.section.groups"), section: "Connections" },
+    { id: "frpc", label: t("settings.section.frpc"), section: "Connections" },
     { id: "import-export", label: t("settings.section.import_export"), section: "Connections" },
     { id: "github-sync", label: t("settings.section.github_sync"), section: "Connections" },
     { id: "shell-settings", label: t("settings.section.shell"), section: "Sessions" },
@@ -108,6 +113,7 @@
     if (id === "forwards" && p === "forward-edit") return true;
     if (id === "groups" && p === "group-edit") return true;
     if (id === "import-export" && p === "import-ssh-config") return true;
+    if (id === "frpc" && p === "frpc-edit") return true;
     return false;
   }
 </script>

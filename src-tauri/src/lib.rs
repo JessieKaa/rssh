@@ -3,6 +3,7 @@ mod commands;
 pub mod crypto;
 pub mod db;
 pub mod error;
+mod frpc;
 pub mod migration;
 pub mod models;
 pub mod secret;
@@ -33,6 +34,18 @@ pub fn run() {
                 let label = window.label();
                 // Close only sessions belonging to this window.
                 commands::lifecycle::close_window_sessions(&state, label);
+
+                // Stop all frpc processes when the last window is destroyed
+                // (Android: frpc lifecycle managed by foreground service, not window)
+                let window_count = window.app_handle().webview_windows().len();
+                if window_count <= 1 {
+                    #[cfg(not(target_os = "android"))]
+                    if let Ok(mut frpc) = state.active_frpc.lock() {
+                        for (_, h) in frpc.drain() {
+                            let _ = h.stop();
+                        }
+                    }
+                }
             }
         })
         .setup(|app| {
@@ -78,8 +91,31 @@ pub fn run() {
                 passphrase_cache: Mutex::new(HashMap::new()),
                 window_sessions: Mutex::new(HashMap::new()),
                 ai_sessions: Mutex::new(HashMap::new()),
+                active_frpc: Mutex::new(HashMap::new()),
+                frpc_auto_start_errors: Mutex::new(Vec::new()),
                 data_dir,
             });
+
+            // Auto-start enabled frpc configs
+            {
+                let state_handle = app.state::<AppState>();
+                let db_ref = state_handle.db.clone();
+                if let Ok(enabled) = db::frpc::list_enabled(&db_ref) {
+                    let mut errors = Vec::new();
+                    for config in enabled {
+                        if let Err(e) = frpc::process::auto_start_config(&state_handle, &config) {
+                            log::warn!("frpc auto-start failed for {}: {}", config.name, e);
+                            errors.push(format!("{}: {}", config.name, e));
+                        }
+                    }
+                    if !errors.is_empty() {
+                        if let Ok(mut errs) = state_handle.frpc_auto_start_errors.lock() {
+                            *errs = errors;
+                        }
+                    }
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -112,6 +148,21 @@ pub fn run() {
             commands::forward::forward_start,
             commands::forward::forward_stats,
             commands::forward::forward_stop,
+            // frpc proxy
+            commands::frpc::list_frpc_configs,
+            commands::frpc::get_frpc_config,
+            commands::frpc::create_frpc_config,
+            commands::frpc::delete_frpc_config,
+            commands::frpc::read_frpc_toml,
+            commands::frpc::write_frpc_toml,
+            commands::frpc::rename_frpc_config,
+            commands::frpc::toggle_frpc_enabled,
+            commands::frpc::get_frpc_auto_start_errors,
+            commands::frpc::frpc_start,
+            commands::frpc::frpc_stop,
+            commands::frpc::frpc_status,
+            commands::frpc::frpc_logs,
+            commands::frpc::frpc_binary_info,
             // settings & snippets & highlights
             commands::settings::get_setting,
             commands::settings::set_setting,

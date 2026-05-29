@@ -1,6 +1,7 @@
 pub mod ai_skill;
 pub mod credential;
 pub mod forward;
+pub mod frpc;
 pub mod group;
 pub mod highlight;
 pub mod profile;

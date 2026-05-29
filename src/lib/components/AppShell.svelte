@@ -34,6 +34,7 @@
     let pinned = $state(false);
 
     function togglePin() {
+        if (app.isMobile) return;
         pinned = !pinned;
         getCurrentWindow().setAlwaysOnTop(pinned).catch(e => {
             console.error("setAlwaysOnTop failed:", e);
@@ -219,6 +220,7 @@
     });
 
     $effect(() => {
+        if (app.isMobile) return;
         const tab = app.activeTab();
         if (app.settingsActive()) {
             getCurrentWindow().setTitle("Settings");
@@ -1064,6 +1066,10 @@
     @media (max-width: 480px) {
         .ai-side { flex: 1; }
         .content.ai-on .main-area { flex: 0; }
+        .content.sftp-on .sftp-side { flex: 1; flex-basis: auto; }
+        .content.sftp-on .main-area { flex: 0; }
+        .content.sftp-on .sftp-resize-handle { display: none; }
+        .content.sftp-on.ai-on .ai-side { flex: 0; }
     }
 
     .pane {

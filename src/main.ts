@@ -1,3 +1,16 @@
+// Polyfill for older WebViews (Chrome < 85) that lack String.prototype.replaceAll
+if (!String.prototype.replaceAll) {
+  String.prototype.replaceAll = function (search: string | RegExp, replacement: string) {
+    if (search instanceof RegExp) {
+      if (!search.global) {
+        throw new TypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+      }
+      return this.replace(search, replacement);
+    }
+    return this.split(search).join(replacement);
+  };
+}
+
 import App from "./App.svelte";
 import { mount } from "svelte";
 import * as theme from "./lib/themes/store.svelte.ts";

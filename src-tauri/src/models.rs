@@ -117,6 +117,17 @@ pub struct Group {
     pub sort_order: i32,
 }
 
+// --- FrpcConfig ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrpcConfig {
+    pub id: String,
+    pub name: String,
+    pub file_name: String,
+    pub enabled: bool,
+    pub created_at: i64,
+}
+
 // --- Highlight ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

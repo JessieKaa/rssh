@@ -3,8 +3,23 @@
     import * as ai from "../ai/store.svelte.ts";
     import { toast } from "../stores/toast.svelte.ts";
     import { t } from "../i18n/index.svelte.ts";
+    import { onDestroy } from "svelte";
 
     function prevent(e: Event) { e.preventDefault(); }
+
+    let _repeatTimer: ReturnType<typeof setInterval> | null = null;
+
+    function repeatStart(fn: () => void) {
+        repeatStop();
+        fn();
+        _repeatTimer = setInterval(fn, 100);
+    }
+
+    function repeatStop() {
+        if (_repeatTimer) { clearInterval(_repeatTimer); _repeatTimer = null; }
+    }
+
+    onDestroy(repeatStop);
 
     function send(seq: string) {
         app.sendToTerminal(seq);
@@ -35,11 +50,34 @@
             toast.info(t("ai.no_session"));
             return;
         }
+        // AI / SFTP 互斥：开 AI 时自动关 SFTP
+        if (!ai.isOpen() && app.sftpOpen()) {
+            app.closeSftp();
+        }
         if (!ai.isOpen() && !mobileHintShown) {
             toast.info(t("ai.mobile.hint"));
             mobileHintShown = true;
         }
         ai.togglePanel();
+    }
+
+    let canOpenSftp = $derived.by(() => {
+        const tab = app.activeTab();
+        if (!tab || tab.type !== "ssh") return false;
+        return !!app.sessionIdForTab(tab.id);
+    });
+
+    function toggleSftp() {
+        if (!app.sftpOpen() && !canOpenSftp) return;
+        // AI / SFTP 互斥：开 SFTP 时自动关 AI
+        if (!app.sftpOpen() && ai.isOpen()) {
+            ai.togglePanel();
+        }
+        if (app.sftpOpen()) {
+            app.closeSftp();
+        } else {
+            app.openSftp();
+        }
     }
 </script>
 
@@ -48,12 +86,13 @@
     <button class="key mod" class:active={app.altActive()} onpointerdown={prevent} onclick={() => app.setAlt(!app.altActive())}>Alt</button>
     <button class="key" onpointerdown={prevent} onclick={() => send('\x1b')}>Esc</button>
     <button class="key" onpointerdown={prevent} onclick={() => send('\t')}>Tab</button>
-    <button class="key" onpointerdown={prevent} onclick={() => arrow('A')}>↑</button>
-    <button class="key" onpointerdown={prevent} onclick={() => arrow('B')}>↓</button>
-    <button class="key" onpointerdown={prevent} onclick={() => arrow('D')}>←</button>
-    <button class="key" onpointerdown={prevent} onclick={() => arrow('C')}>→</button>
+    <button class="key" onpointerdown={(e) => { prevent(e); repeatStart(() => arrow('A')); }} onpointerup={repeatStop} onpointerleave={repeatStop} onpointercancel={repeatStop}>↑</button>
+    <button class="key" onpointerdown={(e) => { prevent(e); repeatStart(() => arrow('B')); }} onpointerup={repeatStop} onpointerleave={repeatStop} onpointercancel={repeatStop}>↓</button>
+    <button class="key" onpointerdown={(e) => { prevent(e); repeatStart(() => arrow('D')); }} onpointerup={repeatStop} onpointerleave={repeatStop} onpointercancel={repeatStop}>←</button>
+    <button class="key" onpointerdown={(e) => { prevent(e); repeatStart(() => arrow('C')); }} onpointerup={repeatStop} onpointerleave={repeatStop} onpointercancel={repeatStop}>→</button>
     <button class="key" title="Snippets" onpointerdown={prevent} onclick={() => app.openSnippetPicker()}>⚡</button>
     <button class="key" class:active={ai.isOpen()} class:dim={!ai.isOpen() && !canOpenAi} title="AI Chat" onpointerdown={prevent} onclick={toggleAi}>AI</button>
+    <button class="key" class:active={app.sftpOpen()} class:dim={!app.sftpOpen() && !canOpenSftp} title={t("tab.context.sftp")} onpointerdown={prevent} onclick={toggleSftp}>SFTP</button>
 </div>
 
 <style>
@@ -64,9 +103,17 @@
         background: var(--bg);
         border-top: 1px solid var(--divider);
         flex-shrink: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
+    .keybar::-webkit-scrollbar { display: none; }
     .key {
-        flex: 1;
+        flex: 1 0 0;
+        min-width: 42px;
+        white-space: nowrap;
         height: 36px;
         border: none;
         border-radius: 6px;

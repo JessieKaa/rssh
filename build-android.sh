@@ -40,6 +40,48 @@ done
 echo "=== 1. npm install ==="
 npm ci
 
+# ── frpc binary for Android (optional, requires Go) ──
+FRPC_JNI_DIR="src-tauri/gen/android/app/src/main/jniLibs"
+if command -v go &>/dev/null; then
+    echo "=== 1.5 Build frpc for Android ==="
+    FRPC_VERSION="${FRPC_VERSION:-0.61.1}"
+    declare -A FRPC_ARCH_MAP=(
+        ["aarch64-linux-android"]="arm64-v8a"
+        ["armv7-linux-androideabi"]="armeabi-v7a"
+        ["x86_64-linux-android"]="x86_64"
+        ["i686-linux-android"]="x86"
+    )
+    for rust_target in "${!FRPC_ARCH_MAP[@]}"; do
+        android_abi="${FRPC_ARCH_MAP[$rust_target]}"
+        echo "  Building frpc for $android_abi..."
+        mkdir -p "$FRPC_JNI_DIR/$android_abi"
+
+        # Map Rust target to Go GOARCH
+        case "$rust_target" in
+            aarch64-*)   goarch="arm64" ;;
+            armv7-*)     goarch="arm" ;;
+            x86_64-*)    goarch="amd64" ;;
+            i686-*)      goarch="386" ;;
+            *)           echo "  Unknown target: $rust_target"; continue ;;
+        esac
+
+        # Use NDK clang as CC for CGO
+        export CGO_ENABLED=1
+        export GOOS=android
+        export GOARCH="$goarch"
+        export CC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/${rust_target}24-clang"
+
+        go build -buildmode=pie \
+            -o "$FRPC_JNI_DIR/$android_abi/libfrpc.so" \
+            "github.com/fatedier/frp/cmd/frpc@v${FRPC_VERSION}" 2>/dev/null \
+            || echo "  WARNING: frpc build failed for $android_abi (skipping)"
+    done
+    unset CGO_ENABLED GOOS GOARCH CC
+else
+    echo "=== 1.5 Skipping frpc build (Go not found) ==="
+    echo "  Install Go to bundle frpc, or place pre-built libfrpc.so in $FRPC_JNI_DIR/{abi}/"
+fi
+
 echo "=== 2. Build Tauri Android (APK) ==="
 npx tauri android build
 
